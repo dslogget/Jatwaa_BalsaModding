@@ -23,7 +23,7 @@ namespace JDSATorqueModule
         public float dampenFactor = 0.8f;
         [SerializeField]
         [CfgField(CfgContext.Config, null, false, null)]
-        public float adjustFactor = 40f;
+        public float adjustFactor = 50f;
         [SerializeField]
         [CfgField(CfgContext.Config, null, false, null)]
         float angle;
@@ -31,8 +31,7 @@ namespace JDSATorqueModule
         [CfgField(CfgContext.Config, null, false, null)]
         string StartUpString = "Starting JDSA Torque Systems";
 
-        private float vertAxis = 0;
-        private float horiAxis = 0;
+        private FSInputState inputState;
 
         public override void OnModuleSpawn()
         {
@@ -45,19 +44,20 @@ namespace JDSATorqueModule
 
         void FixedUpdate()
         {
-            if (!this.part.spawned || this.Rb == null || (Object)this.vehicle == (Object)null || !PartModuleUtil.CheckCanApplyForces((PartModule)this) || !this.vehicle.IsAuthorityOrBot)
+            if (!this.part.spawned || this.Rb == null || (Object)this.vehicle == (Object)null || !PartModuleUtil.CheckCanApplyForces((PartModule)this) || !this.vehicle.IsAuthorityOrBot || inputState == null)
                 return;
-            Quaternion applied = Quaternion.AngleAxis(-vertAxis * rotTorque, Vector3.right) * Quaternion.AngleAxis(horiAxis * rotTorque, Vector3.up);
+            Quaternion applied = Quaternion.AngleAxis(-inputState.pitch * rotTorque, Vector3.right) 
+                                 * Quaternion.AngleAxis(inputState.roll * rotTorque, Vector3.up)
+                                 * Quaternion.AngleAxis(inputState.yaw * rotTorque, Vector3.back);
             transform.localRotation = applied;
 
-
-            Rb.AddRelativeTorque( applied.eulerAngles * adjustFactor * dampenFactor * Time.deltaTime, ForceMode.Force );
+            Vector3 torqueVec = new Vector3( -inputState.pitch, inputState.yaw, -inputState.roll );
+            Rb.AddRelativeTorque( torqueVec * adjustFactor * dampenFactor * Time.deltaTime, ForceMode.Force );
         }
 
         public void OnReceiveCtrlState(FSInputState data)
         {
-            vertAxis = data.pitch;
-            horiAxis = data.roll;
+            inputState = data;
         }
 
     }
