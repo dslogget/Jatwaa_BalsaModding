@@ -1,21 +1,38 @@
+using BalsaCore;
+using BalsaCore.FX;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using BalsaCore;
+using UnityEditor;
 using Modules;
+using CfgFields;
 
 namespace JDSATorqueModule
 {
-    public class GyroAddForce : PartModule
+    public class JDSATorqueModule : PartModule, ICtrlReceiver
     {
-
-        public float rotTorque = 1000;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
+        public float rotTorque;
         public Quaternion StartQuarternion;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
         public Vector3 axis;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
         public float dampenFactor = 0.8f;
-        public float adjustFactor = 1000f;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
+        public float adjustFactor = 40f;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
         float angle;
+        [SerializeField]
+        [CfgField(CfgContext.Config, null, false, null)]
         string StartUpString = "Starting JDSA Torque Systems";
+
+        private float vertAxis = 0;
+        private float horiAxis = 0;
 
         public override void OnModuleSpawn()
         {
@@ -24,40 +41,23 @@ namespace JDSATorqueModule
             Debug.Log($"{Time.realtimeSinceStartup} [GyroTorquer] {StartUpString}");
         }
 
+        protected string GetModuleName() => "JDSATorqueModule.JDSATorqueModule";
+
         void FixedUpdate()
         {
             if (!this.part.spawned || this.Rb == null || (Object)this.vehicle == (Object)null || !PartModuleUtil.CheckCanApplyForces((PartModule)this) || !this.vehicle.IsAuthorityOrBot)
                 return;
-            float vert = Input.GetAxis("Vertical");
-            float horiz = Input.GetAxis("Horizontal");
-            if (vert > 0)
-            {
-                transform.rotation = Quaternion.AngleAxis(rotTorque, Vector3.up);
-            }
-            if (vert < 0)
-            {
-                transform.rotation = Quaternion.AngleAxis(rotTorque, Vector3.down);
-            }
-
-            if (horiz < 0)
-            {
-                transform.rotation = Quaternion.AngleAxis(rotTorque, Vector3.left);
-            }
-            if (horiz > 0)
-            {
-                transform.rotation = Quaternion.AngleAxis(rotTorque, Vector3.right);
-            }
+            Quaternion applied = Quaternion.AngleAxis(-vertAxis * rotTorque, Vector3.right) * Quaternion.AngleAxis(horiAxis * rotTorque, Vector3.up);
+            transform.localRotation = applied;
 
 
-            Quaternion deltaQuat = Quaternion.FromToRotation(Rb.rb.transform.up, Vector3.up);
-            deltaQuat.ToAngleAxis(out angle, out axis);
-            Rb.AddTorque(-Rb.angularVelocity * dampenFactor * Time.deltaTime, ForceMode.Acceleration);
-            Rb.AddTorque(axis.normalized * angle * adjustFactor * Time.deltaTime, ForceMode.Acceleration);
+            Rb.AddRelativeTorque( applied.eulerAngles * adjustFactor * dampenFactor * Time.deltaTime, ForceMode.Force );
+        }
 
-            Quaternion deltaQuatYaw = Quaternion.FromToRotation(Rb.rb.transform.right, Vector3.right);
-            deltaQuatYaw.ToAngleAxis(out angle, out axis);
-            Rb.AddTorque(-Rb.angularVelocity * dampenFactor * Time.deltaTime, ForceMode.Acceleration);
-            Rb.AddTorque(axis.normalized * angle * adjustFactor * Time.deltaTime, ForceMode.Acceleration);
+        public void OnReceiveCtrlState(FSInputState data)
+        {
+            vertAxis = data.pitch;
+            horiAxis = data.roll;
         }
 
     }
