@@ -33,6 +33,11 @@ namespace JDSATorqueModule
 
         private FSInputState inputState;
 
+        private Quaternion lockedHeading = new Quaternion();
+        private bool active = true;
+        private float overrideThreshold = 0.05f;
+        float kP = 5;
+
         public override void OnModuleSpawn()
         {
             StartQuarternion = transform.rotation;
@@ -44,15 +49,27 @@ namespace JDSATorqueModule
 
         void FixedUpdate()
         {
-            if (!this.part.spawned || this.Rb == null || (Object)this.vehicle == (Object)null || !PartModuleUtil.CheckCanApplyForces((PartModule)this) || !this.vehicle.IsAuthorityOrBot || inputState == null)
+            if ( !active || !this.part.spawned || this.Rb == null || (Object)this.vehicle == (Object)null || !PartModuleUtil.CheckCanApplyForces((PartModule)this) || !this.vehicle.IsAuthorityOrBot || inputState == null)
                 return;
-            Quaternion applied = Quaternion.AngleAxis(-inputState.pitch * rotTorque, Vector3.right) 
-                                 * Quaternion.AngleAxis(inputState.roll * rotTorque, Vector3.up)
-                                 * Quaternion.AngleAxis(inputState.yaw * rotTorque, Vector3.back);
-            transform.localRotation = applied;
 
-            Vector3 torqueVec = new Vector3( -inputState.pitch, inputState.yaw, -inputState.roll );
-            Rb.AddRelativeTorque( torqueVec * adjustFactor * dampenFactor * Time.deltaTime, ForceMode.Force );
+
+            if (System.Math.Abs(inputState.roll) > overrideThreshold || System.Math.Abs(inputState.pitch) > overrideThreshold || System.Math.Abs(inputState.yaw) > overrideThreshold)
+            {
+                Vector3 torqueVec = new Vector3(-inputState.pitch, inputState.yaw, -inputState.roll);
+                Rb.AddRelativeTorque(torqueVec * adjustFactor * dampenFactor * Time.deltaTime, ForceMode.Force);
+                lockedHeading = vehicle.Physics.transform.rotation;
+            } else
+            {
+                Quaternion diff = lockedHeading * transform.rotation.Inverse();
+
+                Vector3 diffEuler = diff.eulerAngles;
+                diffEuler.x = diffEuler.x > 180 ? 360 - diffEuler.x : -diffEuler.x;
+                diffEuler.y = diffEuler.y > 180 ? diffEuler.y - 360 : diffEuler.y;
+                diffEuler.z = diffEuler.z > 180 ? 360 - diffEuler.z : -diffEuler.z;
+
+
+                Rb.AddRelativeTorque(diffEuler * kP * Time.deltaTime, ForceMode.Force);
+            }
         }
 
         public void OnReceiveCtrlState(FSInputState data)
